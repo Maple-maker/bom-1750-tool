@@ -1,0 +1,7 @@
+/* style.css — intentionally minimal.
+ *
+ * All styling is inlined in templates/index.html (CSS variables mirror v25:
+ * --primary #1a365d, --accent #3182ce, --success #38a169, --warning #d69e2e,
+ * --danger #e53e3e, --bg #f7fafc, --card #fff, --border #e2e8f0).
+ * This file exists so static/ is non-empty and ready for future shared styles.
+ */

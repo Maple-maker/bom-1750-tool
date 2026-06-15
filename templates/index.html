@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BOM → DD1750 Generator</title>
+<style>
+  :root {
+    --primary: #1a365d;
+    --accent:  #3182ce;
+    --success: #38a169;
+    --warning: #d69e2e;
+    --danger:  #e53e3e;
+    --bg:      #f7fafc;
+    --card:    #fff;
+    --border:  #e2e8f0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: #1a202c;
+  }
+  header.appbar {
+    background: var(--primary);
+    color: #fff;
+    padding: 18px 24px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+  }
+  header.appbar h1 { margin: 0; font-size: 1.35rem; font-weight: 600; }
+  header.appbar p  { margin: 4px 0 0; font-size: 0.85rem; opacity: 0.85; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 24px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .card h2 {
+    margin: 0 0 14px;
+    font-size: 1.05rem;
+    color: var(--primary);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+  }
+  /* Drop zone */
+  #dropzone {
+    border: 2px dashed var(--accent);
+    border-radius: 10px;
+    padding: 42px 16px;
+    text-align: center;
+    color: #4a5568;
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+    background: #f0f6ff;
+  }
+  #dropzone.drag { background: #dbeafe; border-color: var(--primary); }
+  #dropzone strong { color: var(--primary); }
+  #uploadStatus { margin-top: 10px; font-size: 0.85rem; color: #4a5568; min-height: 20px; }
+  /* Header form */
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 18px;
+  }
+  .field { display: flex; flex-direction: column; }
+  .field label { font-size: 0.78rem; font-weight: 600; color: #4a5568; margin-bottom: 4px; }
+  .field input {
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.9rem;
+  }
+  .field input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(49,130,206,0.18); }
+  .hint { font-size: 0.72rem; color: var(--warning); margin-top: 3px; }
+  /* Preview table */
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th, td { border: 1px solid var(--border); padding: 6px 8px; text-align: left; vertical-align: middle; }
+  th { background: #edf2f7; color: var(--primary); font-weight: 600; }
+  td.center { text-align: center; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  /* Buttons */
+  button {
+    font-size: 0.9rem; font-weight: 600; border: none; border-radius: 7px;
+    padding: 9px 16px; cursor: pointer; transition: filter .15s;
+  }
+  button:hover { filter: brightness(0.94); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-success { background: var(--success); color: #fff; }
+  .btn-ghost   { background: #edf2f7; color: var(--primary); }
+  .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 6px; }
+  .muted { color: #718096; font-size: 0.8rem; }
+  /* Status badge */
+  .badge-ok { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 700; background: #c6f6d5; color: #22543d; }
+  .badge-warn { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 700; background: #fefcbf; color: #744210; }
+  /* Empty state */
+  .empty-state { text-align: center; padding: 32px 16px; color: #718096; }
+</style>
+</head>
+<body>
+
+<header class="appbar">
+  <h1>BOM &rarr; DD1750 Generator</h1>
+  <p>Drop GCSS-Army BOM PDFs &rarr; auto-extract components &rarr; generate individual + master DD1750s as a ZIP.</p>
+</header>
+
+<div class="wrap">
+
+  <!-- 1. UPLOAD -->
+  <div class="card">
+    <h2>1 &middot; Upload BOM PDFs</h2>
+    <div id="dropzone">
+      <p><strong>Drag &amp; drop</strong> GCSS-Army BOM PDFs here, or <strong>click to browse</strong>.</p>
+      <p class="muted">Accepts multiple files. Components with OH Qty &gt; 0 are extracted automatically.</p>
+      <input type="file" id="fileInput" accept="application/pdf" multiple style="display:none;">
+    </div>
+    <div id="uploadStatus"></div>
+  </div>
+
+  <!-- 2. PARSED BOMs PREVIEW -->
+  <div class="card" id="previewCard" style="display:none;">
+    <h2>2 &middot; Parsed End Items</h2>
+    <table id="previewTable">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>LIN</th>
+          <th>Description</th>
+          <th>Serial</th>
+          <th>SLOC</th>
+          <th class="center">Components</th>
+        </tr>
+      </thead>
+      <tbody id="previewBody">
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 3. HEADER FORM -->
+  <div class="card">
+    <h2>3 &middot; Header Information</h2>
+    <div class="grid">
+      <div class="field"><label>UIC</label><input id="h_uic" placeholder="WABCD0"></div>
+      <div class="field"><label>Battery</label><input id="h_battery" placeholder="B BTY"></div>
+      <div class="field"><label>Battalion</label><input id="h_battalion" placeholder="2-55 ADA"></div>
+      <div class="field"><label>Packed By (RANK LAST, FIRST)</label><input id="h_packed_by" placeholder="SSG MOORE, JOHN"></div>
+      <div class="field"><label>SHRH POC</label><input id="h_shrh" placeholder="CPT HOLLAND"></div>
+      <div class="field"><label>SLOC / Section</label><input id="h_sloc" placeholder="AS8G"></div>
+      <div class="field"><label>Container #</label><input id="h_container" placeholder="CONEX-01"></div>
+      <div class="field"><label>SUN #</label><input id="h_sun" placeholder="SUN-2026-001"></div>
+      <div class="field"><label>SEAL #</label><input id="h_seal" placeholder="SEAL-4455"></div>
+      <div class="field"><label>Date</label><input id="h_date" placeholder="16 JUN 2026"></div>
+      <div class="field">
+        <label>Signer Name / Title</label>
+        <input id="h_signer_name" placeholder="1LT RABATIN, JAIDEN">
+        <span class="hint">Must differ from Packed By.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. GENERATE -->
+  <div class="card">
+    <h2>4 &middot; Generate</h2>
+    <p class="muted" style="margin:0 0 12px;">
+      Generates one DD1750 per end item + a master DD1750 aggregating all, delivered as a ZIP.
+    </p>
+    <div class="actions">
+      <button class="btn-success" id="generateBtn" disabled>Generate All 1750s (ZIP)</button>
+    </div>
+    <div id="generateStatus" style="margin-top:10px;font-size:0.85rem;color:#4a5568;"></div>
+  </div>
+
+</div>
+
+<script>
+/* BOM DD1750 Generator — vanilla JS, no build step */
+
+const $ = (id) => document.getElementById(id);
+
+let parsedBoms = [];  // holds the last successful /upload-boms response
+
+/* ---- Header collection ---- */
+function collectHeader() {
+  return {
+    uic:         $("h_uic").value.trim(),
+    battery:     $("h_battery").value.trim(),
+    battalion:   $("h_battalion").value.trim(),
+    packed_by:   $("h_packed_by").value.trim(),
+    shrh:        $("h_shrh").value.trim(),
+    sloc:        $("h_sloc").value.trim(),
+    container:   $("h_container").value.trim(),
+    sun:         $("h_sun").value.trim(),
+    seal:        $("h_seal").value.trim(),
+    date:        $("h_date").value.trim(),
+    signer_name: $("h_signer_name").value.trim(),
+  };
+}
+
+/* ---- Render preview table ---- */
+function renderPreview(boms) {
+  parsedBoms = boms;
+  const body = $("previewBody");
+  body.innerHTML = "";
+
+  boms.forEach((bom, idx) => {
+    const tr = document.createElement("tr");
+    if (bom.error) {
+      tr.innerHTML = `
+        <td class="center">${idx + 1}</td>
+        <td colspan="5" style="color:var(--danger)">Error: ${escapeHtml(bom.error)} — ${escapeHtml(bom.source_file || "")}</td>
+      `;
+    } else {
+      const compBadge = bom.component_count > 0
+        ? `<span class="badge-ok">${bom.component_count}</span>`
+        : `<span class="badge-warn">0</span>`;
+      tr.innerHTML = `
+        <td class="center">${idx + 1}</td>
+        <td>${escapeHtml(bom.lin || "—")}</td>
+        <td>${escapeHtml(bom.desc || "—")}</td>
+        <td>${escapeHtml(bom.serial || "—")}</td>
+        <td>${escapeHtml(bom.sloc || "—")}</td>
+        <td class="center">${compBadge}</td>
+      `;
+    }
+    body.appendChild(tr);
+  });
+
+  $("previewCard").style.display = "";
+  $("generateBtn").disabled = false;
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+/* ---- Upload ---- */
+async function uploadBoms(fileList) {
+  if (!fileList || !fileList.length) return;
+
+  const status = $("uploadStatus");
+  status.textContent = `Uploading ${fileList.length} file(s)…`;
+  $("generateBtn").disabled = true;
+
+  const fd = new FormData();
+  for (const f of fileList) fd.append("files", f);
+
+  try {
+    const resp = await fetch("/upload-boms", { method: "POST", body: fd });
+    const data = await resp.json();
+    if (!resp.ok) {
+      status.textContent = "Error: " + (data.error || resp.statusText);
+      return;
+    }
+    const valid = data.boms.filter(b => !b.error);
+    const errs  = data.boms.filter(b => b.error);
+    status.textContent =
+      `Parsed ${data.bom_count} file(s) → ${valid.length} end item(s) extracted` +
+      (errs.length ? `, ${errs.length} error(s).` : ".");
+    renderPreview(data.boms);
+  } catch (e) {
+    status.textContent = "Upload failed: " + e.message;
+  }
+}
+
+/* ---- Generate ZIP ---- */
+async function generateBoms() {
+  if (!parsedBoms.length) {
+    alert("No BOMs loaded. Upload BOM PDFs first.");
+    return;
+  }
+
+  const btn = $("generateBtn");
+  const status = $("generateStatus");
+  btn.disabled = true;
+  btn.textContent = "Generating…";
+  status.textContent = "Rendering PDFs — this may take a few seconds…";
+
+  // Only send successfully parsed BOMs (skip error entries)
+  const validBoms = parsedBoms.filter(b => !b.error);
+
+  try {
+    const resp = await fetch("/generate-boms", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ boms: validBoms, header: collectHeader() }),
+    });
+
+    if (!resp.ok) {
+      let msg = resp.statusText;
+      try { msg = (await resp.json()).error || msg; } catch (_) {}
+      status.textContent = "Generate failed: " + msg;
+      return;
+    }
+
+    const blob = await resp.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = "DD1750s.zip";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
+    status.textContent = `Done — ZIP downloaded with ${validBoms.length} individual DD1750(s) + Master_DD1750.pdf.`;
+  } catch (e) {
+    status.textContent = "Generate error: " + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Generate All 1750s (ZIP)";
+  }
+}
+
+/* ---- Wire events ---- */
+(function init() {
+  const dz    = $("dropzone");
+  const input = $("fileInput");
+
+  dz.addEventListener("click", () => input.click());
+  input.addEventListener("change", () => uploadBoms(input.files));
+
+  dz.addEventListener("dragover",  (e) => { e.preventDefault(); dz.classList.add("drag"); });
+  dz.addEventListener("dragleave", ()  => dz.classList.remove("drag"));
+  dz.addEventListener("drop",      (e) => {
+    e.preventDefault();
+    dz.classList.remove("drag");
+    uploadBoms(e.dataTransfer.files);
+  });
+
+  $("generateBtn").addEventListener("click", generateBoms);
+})();
+</script>
+</body>
+</html>
