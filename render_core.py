@@ -319,11 +319,16 @@ def generate_dd1750_from_items(
         Tuple of (output_path, item_count)
     """
     if not items:
-        # Return blank template if no items
-        reader = PdfReader(template_path)
+        # No components — still render header so the form isn't blank
+        overlay_buffer = generate_dd1750_overlay(
+            [], 1, 1, header, draw_master_header_fn=draw_master_header_fn
+        )
+        overlay = PdfReader(overlay_buffer)
+        template_page = PdfReader(template_path).pages[0]
+        template_page.merge_page(overlay.pages[0])
         writer = PdfWriter()
-        writer.add_page(reader.pages[0])
-        with open(output_path, 'wb') as f:
+        writer.add_page(template_page)
+        with open(output_path, "wb") as f:
             writer.write(f)
         return output_path, 0
 

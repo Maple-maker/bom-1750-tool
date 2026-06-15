@@ -108,24 +108,32 @@ def generate_boms():
                     for i, c in enumerate(components)
                 ]
 
-                end_item_text = "\n".join([
+                # Build header with same coordinate-aligned layout as master
+                individual_row = {
+                    "box_num": 1,
+                    "model": bom.get("desc", ""),
+                    "lin": bom.get("lin", ""),
+                    "nsn": bom.get("niin", ""),
+                    "serials": [bom.get("serial", "")] if bom.get("serial") else [],
+                    "qty": 1,
+                    "needs_review": False,
+                }
+                header_info = master_core.build_master_header(header, [individual_row])
+                # Replace END ITEM block with individual BOM specifics
+                header_info.end_item = "\n".join([
                     f"{bom.get('lin', '')} {bom.get('desc', '')}",
                     f"SN: {bom.get('serial', '')}",
                     f"SLOC: {bom.get('sloc', '')}",
                 ])
-                header_info = render_core.HeaderInfo(
-                    packed_by=header.get("packed_by", ""),
-                    num_boxes="1",
-                    date=header.get("date", ""),
-                    typed_name=header.get("signer_name", ""),
-                    end_item=end_item_text,
-                )
+                header_info.num_boxes = "1"
 
                 safe_name = bom.get("serial") or bom.get("lin") or "UNKNOWN"
-                # Sanitize for filesystem
                 safe_name = "".join(c for c in safe_name if c.isalnum() or c in "-_")
                 out_path = os.path.join(tmpdir, f"{safe_name}_DD1750.pdf")
-                render_core.generate_dd1750_from_items(items, TEMPLATE_PDF, out_path, header_info)
+                render_core.generate_dd1750_from_items(
+                    items, TEMPLATE_PDF, out_path, header_info,
+                    draw_master_header_fn=render_core.draw_master_header,
+                )
                 zf.write(out_path, f"individual/{safe_name}_DD1750.pdf")
 
             # --- Master DD1750: group by LIN ---
